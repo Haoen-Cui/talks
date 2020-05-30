@@ -1,0 +1,400 @@
+---
+title: "Fitting Insurance Claims Severity Data with Coverage Modifications"
+subtitle: How to Trick `fitdistrplus::fitdist` to Work with Customized Density Functions
+author: | 
+  | [Haoen Cui](https://haoen-cui.github.io/)
+date: | 
+  | May 30, 2020 
+  | [satRday Chicago](https://chicago2020.satrdays.org/)
+  | [Presentation GitHub Link](https://github.com/Haoen-Cui/talks/tree/master/claims-data-with-coverage-modification)
+output:
+  beamer_presentation:
+    colortheme: "seahorse"
+    slide_level: 2
+    toc: true
+header-includes:
+  # short title for sidebar, headers, and footers 
+  - \AtBeginDocument{\title[Coverage Modifications]{Fitting Insurance Claims Severity Data with Coverage Modifications}}
+  # small font for code chunks 
+  - \AtBeginDocument{\renewenvironment{Shaded} {\begin{snugshade}\footnotesize} {\end{snugshade}}}
+linkcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Distribution Fitting 
+
+## General Framework 
+
+$$
+\boxed{
+\mathcal{P}(\theta)
+    \underset{\text{
+        Parameter Fitting
+    }}{\overset{\text{
+        Data Generating Process
+    }}{\rightleftharpoons}}
+\mathcal{D} = \{x_i\}_{i=1}^n
+}
+$$
+
+- Data generating process 
+    - Given distribution model $X \sim \mathcal{P}(\theta)$
+    - Generate i.i.d. data $\mathcal{D} = \{x_i\}_{i=1}^n$ from $\mathcal{P}$
+
+- Fitting parametric distribution model
+    - Given observed data $\mathcal{D} = \{x_i\}_{i=1}^n$, assuming i.i.d.
+    - Find parameter $\widehat{\theta}$ such that distribution model $\mathcal{P}(\widehat{\theta})$ "*fits best*"
+        - Maximum Likelihood Estimation 
+        - Generalized Method of Moments
+        - Maximum Goodness-of-Fit Estimation
+
+## Distribution Fitting Example 
+
+Suppose we have an unknown data generating process ^[Contaminated normal distribution used for data simulation: $$ (1 - p) \cdot \mathcal{N}(\mu, {\sigma_1}^2) + p \cdot \mathcal{N}(\mu, {\sigma_2}^2) $$], and we attempt to find a set of parameters $(\mu^*, \sigma^*)$ 
+such that 
+$$\mathcal{N}(\mu^*, {\sigma^*}^2)$$ 
+*fits* the data the best (among normal distribution family).
+
+```{r dist_fit_data, echo=FALSE}
+# parameters 
+p <- 0.05 
+mu <- 0 
+sigma1 <- 1
+sigma2 <- 3
+n_sample <- 500 
+
+# data simulation 
+n_contaminated <- rbinom(n = 1, size = n_sample, prob = p) 
+x <- c(
+    rnorm(n = n_sample - n_contaminated, mean = mu, sd = sigma1), 
+    rnorm(n = n_contaminated, mean = mu, sd = sigma2)
+)
+```
+
+```{r dist_fit_data_summary}
+summary(x)
+```
+
+## Distribution Fitting Example (Cont.)
+
+```{r dist_fit_ex}
+fit <- fitdistrplus::fitdist(x, distr = dnorm, method = 'mle')
+plot(fit)
+```
+
+# Coverage Modifications 
+
+## Incurred Raw Loss v.s. Insurer Covered Loss 
+
+When an *insured* incurs a loss of amount $x$, part of the raw amount will be covered by the *insurer* (insurance policy). The process of computing covered loss from raw loss is known as *coverage modification* in actuarial mathematics. Some typical configurations are listed below:
+
+- (Ordinary) Policy Deductible $d \geq 0$
+$$
+x \mapsto (x - d)_{+}
+$$
+- Policy Limit $u > d$
+$$
+x \mapsto \min\{x, u\}
+$$
+- Coinsurance Factor $\alpha \in [0, 1]$
+$$
+x \mapsto \alpha \cdot x
+$$
+
+## Coverage Modifications at a Glance
+
+```{r cov_mod_helper, echo=FALSE}
+modify_loss <- function(
+    loss, 
+    deductible = 0, 
+    franchise = FALSE, 
+    limit = Inf, 
+    coinsurance = 1, 
+    inflation = 0, 
+    per.loss = FALSE
+) {
+  # 
+  # a helper function to compute modified (covered) loss amount
+  #   arguments align with actuar::coverage in version 2.3-1
+  # 
+  # Arguments: 
+  #   - loss: a 1-D numeric vector for raw (unmodified) loss amounts
+  #   - deductible: a unique positive numeric value; policy deductible
+  #   - franchise: logical; 
+  #                TRUE for a franchise deductible, 
+  #                FALSE (default) for an ordinary deductible.
+  #   - limit: a unique positive numeric value larger than deductible; policy limit
+  #   - coinsurance: a unique value between 0 and 1; the proportion of coinsurance
+  #   - inflation: a unique value between 0 and 1; the rate of inflation
+  #   - per.loss: logical; 
+  #               TRUE for the per loss distribution, 
+  #               FALSE (default) for the per payment distribution
+  # 
+  # Value:
+  #   a 1-D numeric vector containing covered loss amounts
+  # 
+  
+  # inflation (and enforce type conversion)
+  loss.mod <- (1.0 + inflation) * as.numeric(loss)
+  # limit 
+  loss.mod <- sapply(loss.mod, function(loss) min(loss, limit))
+  # deductible 
+  loss.mod <- 
+    sapply(loss.mod - deductible, function(loss) max(loss, 0)) + 
+    ifelse(franchise, deductible, 0)
+  # left missing data type: truncation (per payment) or censoring (per loss)
+  if (!per.loss) { loss.mod <- loss.mod[(loss.mod > 0)] }
+  # coinsurance factor
+  return(loss.mod * coinsurance)
+}
+```
+
+```{r cov_mod_param, echo=FALSE}
+DEDUCTIBLE <- 100 
+LIMIT <- 250  
+COINSURANCE <- 0.4
+LOSS_MIN <- 0 
+LOSS_MAX <- LIMIT + 50 
+```
+
+```{r cov_mod_plot_line, echo=FALSE, message=FALSE, warning=FALSE}
+raw_loss <- seq(from = LOSS_MIN, to = LOSS_MAX, by = 1)
+covered_loss <- modify_loss(
+    loss = raw_loss, 
+    deductible = DEDUCTIBLE, 
+    limit = LIMIT, 
+    coinsurance = COINSURANCE, 
+    per.loss = TRUE 
+)
+
+p1 <- ggplot2::ggplot(
+    data = data.frame(
+        'x' = raw_loss, 
+        'y' = covered_loss, 
+        'not_payment' = raw_loss <= DEDUCTIBLE
+    )
+) + 
+    ggplot2::geom_line(mapping = ggplot2::aes(x = x, y = y, linetype = not_payment)) + 
+    ggplot2::geom_vline(xintercept = DEDUCTIBLE, linetype = 'dotted') + 
+    ggplot2::geom_vline(xintercept = LIMIT, linetype = 'dotted') + 
+    # ggplot2::coord_fixed() + 
+    ggplot2::labs(x = 'Incurred Raw Loss', y = 'Insurer Covered Loss') + 
+    ggplot2::theme_bw() + 
+    # do not show legend 
+    ggplot2::theme(legend.position = "none")
+
+raw_loss <- rnorm(n = n_sample, mean = 150, sd = 30)
+covered_loss <- modify_loss(
+    loss = raw_loss, 
+    deductible = DEDUCTIBLE, 
+    limit = LIMIT, 
+    coinsurance = COINSURANCE, 
+    per.loss = FALSE 
+)
+
+p2 <- ggplot2::ggplot(
+    data = data.frame(
+        'loss_amt' = c(raw_loss, covered_loss), 
+        'loss_type' = c(
+            rep('Incurred Raw Loss', times = length(raw_loss)), 
+            rep('Insurer Covered Loss', times = length(covered_loss))
+        )
+    ), 
+    mapping = ggplot2::aes(x = loss_amt, fill = loss_type, color = loss_type)
+) + 
+    ggplot2::geom_histogram(ggplot2::aes(y=..density..), alpha = 0.5, position = 'identity') + 
+    ggplot2::geom_density(alpha = 0.2) + 
+    ggplot2::xlim(LOSS_MIN, LOSS_MAX) + 
+    ggplot2::facet_wrap(~ loss_type, ncol = 1) + 
+    ggplot2::labs(
+        # axis labels 
+        x = 'Loss Amount ($)', 
+        y = 'Density'# , 
+        # # legend title 
+        # fill = 'Type', color = 'Type'
+    ) + 
+    ggplot2::theme_bw() + 
+    # do not show legend 
+    ggplot2::theme(legend.position = "none")
+
+grid::grid.newpage()
+grid::grid.draw(rbind(
+    ggplot2::ggplotGrob(p1), 
+    ggplot2::ggplotGrob(p2)
+))
+```
+
+# Case Study 
+
+## Policy Specification 
+
+For this example, let's consider an insurance policy with 
+
+- (Ordinary) Policy Deductible: \$ 5,000 
+- Policy Limit: \$ 20,000 
+- Coinsurance Factor: 90 \%
+
+```{r policy_param}
+# policy params 
+DEDUCTIBLE <- 5000 
+LIMIT <- 20000 
+COINSURANCE <- 0.9 
+
+# helper function 
+coverage_modification <- function(x) modify_loss(
+    loss = x, 
+    deductible = DEDUCTIBLE, 
+    limit = LIMIT, 
+    coinsurance = COINSURANCE, 
+    per.loss = FALSE 
+)
+```
+
+## Data Simulation 
+
+Suppose the incurred raw loss amount follows an unknown data generating process 
+$$
+L \sim \ln \mathcal{N}(\mu, \sigma)
+$$
+with the following parameters 
+```{r data_params}
+# lognormal distribution param 
+MU <- 9 
+SIGMA <- 1 
+```
+
+Let's simulate some data for this case study 
+```{r data_sim}
+# data simulation 
+loss_raw <- rlnorm(n = n_sample, meanlog = MU, sdlog = SIGMA) 
+loss_mod <- coverage_modification(loss_raw)
+```
+
+## Data Simulation (Cont.)
+
+```{r plot, echo=FALSE, message=FALSE}
+ggplot2::ggplot(
+    data = data.frame(
+        'loss_amt' = c(loss_raw, loss_mod), 
+        'loss_type' = c(
+            rep('Incurred Raw Loss', times = length(loss_raw)), 
+            rep('Insurer Covered Loss', times = length(loss_mod))
+        )
+    ), 
+    mapping = ggplot2::aes(x = loss_amt, fill = loss_type, color = loss_type)
+) + 
+    ggplot2::geom_histogram(ggplot2::aes(y=..density..), alpha = 0.5, position = 'identity') + 
+    ggplot2::geom_density(alpha = 0.2) + 
+    ggplot2::facet_wrap(~ loss_type, ncol = 1) + 
+    ggplot2::labs(
+        # axis labels 
+        x = 'Loss Amount ($)', 
+        y = 'Density'# , 
+        # # legend title 
+        # fill = 'Type', color = 'Type'
+    ) + 
+    ggplot2::scale_x_continuous(labels = scales::comma) + 
+    ggplot2::scale_y_continuous(labels = scales::scientific) + 
+    ggplot2::theme_bw() + 
+    # do not show legend 
+    ggplot2::theme(legend.position = "none")
+```
+
+## Parameter Estimation 
+
+Affine transformation of modified loss data alone won't be sufficient. (Statistics omitted here.) Instead, we should transform the probability density function according to the contract parameters. 
+
+For modified loss $y \in (0, \alpha (u-d))$, 
+$$
+F_Y(y) = \frac{
+    F_X \big( \frac{y + \alpha d}{\alpha(1+r)} \big) 
+    - F_X \big( \frac{d}{1+r} \big)
+}{
+    1 - F_X \big( \frac{d}{1+r} \big)
+}
+$$
+
+```{r cdf}
+# specify only CDF of loss_raw to get CDF of loss_mod
+ploss_mod <- actuar::coverage(
+    cdf = plnorm,  
+    deductible = DEDUCTIBLE, 
+    limit = LIMIT, 
+    coinsurance = COINSURANCE, 
+    franchise = FALSE, 
+    inflation = 0, 
+    per.loss = FALSE 
+)
+```
+
+## Parameter Estimation (Cont.) 
+
+For modified loss $y \in (0, \alpha (u-d))$, 
+$$
+f_Y(y) = 
+\frac{1}{\alpha(1+r)} \cdot 
+\frac{
+    f_X \big( \frac{y + \alpha d}{\alpha(1+r)} \big) 
+}{
+    1 - F_X \big( \frac{d}{1+r} \big)
+}
+$$
+with a point probability mass at $y = \alpha (u - d)$, 
+$$
+\frac{
+    1 - F_X \big( \frac{u}{1+r} \big)
+}{
+    1 - F_X \big( \frac{d}{1+r} \big)
+}
+$$
+
+```{r pdf}
+# specify both PDF and CDF of loss_raw to get PDF of loss_mod
+dloss_mod <- actuar::coverage(
+    pdf = dlnorm, cdf = plnorm, 
+    deductible = DEDUCTIBLE,
+    limit = LIMIT, 
+    coinsurance = COINSURANCE, 
+    franchise = FALSE, 
+    inflation = 0, 
+    per.loss = FALSE 
+)
+```
+
+## Parameter Estimation (Cont.) 
+
+```{r start_ft, echo=FALSE}
+start_fit <- fitdistrplus::fitdist(data = loss_mod, distr = 'lnorm')$estimate
+start_est <- lapply(
+    split(start_fit, names(start_fit)), 
+    unname
+)
+```
+
+By supplying our customized density function `dloss_mod` (which captures coverage modifications), we can estimate the parameters of raw loss using `fitdistrplus::fitdist` as before. 
+
+\footnotesize
+```{r}
+# parameter fit  
+loss_mod_fit <- fitdistrplus::fitdist(
+    data = loss_mod, 
+    distr = dloss_mod,
+    start = start_est, 
+    method = 'mle'
+)
+loss_mod_fit
+```
+\normalsize
+
+## Concluding Remarks 
+
+We can fit transformed data using existing approaches if we can construct the corresponding distribution functions. 
+
+- [`actuar`](https://cran.r-project.org/web/packages/actuar/index.html): Actuarial Functions and Heavy Tailed Distributions 
+  - `actuar::coverage`: Density and Cumulative Distribution Function for Modified Data 
+- [`fitdistrplus`](https://cran.r-project.org/web/packages/fitdistrplus/index.html): Help to Fit of a Parametric Distribution to Non-Censored or Censored Data 
+  - `fitdistrplus::fitdist`: Fit of Univariate Distributions to Non-Censored Data
