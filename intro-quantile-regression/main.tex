@@ -1,0 +1,413 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Beamer Presentation
+% LaTeX Template
+% Version 1.0 (10/11/12)
+%
+% This template has been downloaded from:
+% http://www.LaTeXTemplates.com
+%
+% License:
+% CC BY-NC-SA 3.0 (http://creativecommons.org/licenses/by-nc-sa/3.0/)
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%	PACKAGES AND THEMES
+%----------------------------------------------------------------------------------------
+
+\documentclass{beamer}
+
+\mode<presentation> {
+
+% The Beamer class comes with a number of default slide themes
+% which change the colors and layouts of slides. Below this is a list
+% of all the themes, uncomment each in turn to see what they look like.
+
+%\usetheme{default}
+%\usetheme{AnnArbor}
+%\usetheme{Antibes}
+%\usetheme{Bergen}
+%\usetheme{Berkeley}
+%\usetheme{Berlin}
+%\usetheme{Boadilla}
+%\usetheme{CambridgeUS}
+%\usetheme{Copenhagen}
+%\usetheme{Darmstadt}
+%\usetheme{Dresden}
+%\usetheme{Frankfurt}
+%\usetheme{Goettingen}
+%\usetheme{Hannover}
+%\usetheme{Ilmenau}
+%\usetheme{JuanLesPins}
+%\usetheme{Luebeck}
+%\usetheme{Madrid}
+%\usetheme{Malmoe}
+%\usetheme{Marburg}
+%\usetheme{Montpellier}
+%\usetheme{PaloAlto}
+%\usetheme{Pittsburgh}
+%\usetheme{Rochester}
+%\usetheme{Singapore}
+%\usetheme{Szeged}
+\usetheme{Warsaw}
+
+% As well as themes, the Beamer class has a number of color themes
+% for any slide theme. Uncomment each of these in turn to see how it
+% changes the colors of your current slide theme.
+
+%\usecolortheme{albatross}
+%\usecolortheme{beaver}
+%\usecolortheme{beetle}
+%\usecolortheme{crane}
+%\usecolortheme{dolphin}
+%\usecolortheme{dove}
+%\usecolortheme{fly}
+%\usecolortheme{lily}
+%\usecolortheme{orchid}
+%\usecolortheme{rose}
+%\usecolortheme{seagull}
+\usecolortheme{seahorse}
+%\usecolortheme{whale}
+%\usecolortheme{wolverine}
+
+%\setbeamertemplate{footline} % To remove the footer line in all slides uncomment this line
+%\setbeamertemplate{footline}[page number] % To replace the footer line in all slides with a simple slide count uncomment this line
+
+%\setbeamertemplate{navigation symbols}{} % To remove the navigation symbols from the bottom of all slides uncomment this line
+}
+
+\usepackage{graphicx} % Allows including images
+\usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
+\usepackage{amsmath}
+\usepackage{hyperref}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\AtBeginSection[]
+{
+   \begin{frame}
+       \frametitle{Outline}
+       \tableofcontents[currentsection]
+   \end{frame}
+}
+
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+\title[Introduction to Quantile Regression]{Introduction to Quantile Regression} % The short title appears at the bottom of every slide, the full title is only on the title page
+
+\author{Haoen CUI} % Your name
+\institute[Uptake] % Your institution as it will appear on the bottom of every slide, may be shorthand to save space
+{
+Uptake Math Club Lightning Talk \\
+\href{http://www.sharelatex.com}{Code Repository: github.com/haoen-cui/}
+% Your institution for the title page
+% Your email address
+}
+%\date{\today} % Date, can be changed to a custom date
+\date{June 26, 2020}
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+%	PRESENTATION SLIDES
+%----------------------------------------------------------------------------------------
+
+%------------------------------------------------
+\section{Empirical Risk Minimization}
+%------------------------------------------------
+
+\subsection{Optimization Problem Setup}
+
+\begin{frame}
+\frametitle{Empirical Risk Minimization (ERM)}
+
+Suppose we want to model (i.e. find ``best'' $f: \mathbb{R}^p \rightarrow \mathbb{R}$) a response variable $Y \in \mathbb{R}$ given features $\boldsymbol{X} \in \mathbb{R}^p$ through \textit{empirical risk minimization} on data set $\{(\boldsymbol{x}^{(i)}, y^{(i)})\}_i^n$ of size $n$
+
+$$
+\min_{f} \frac{1}{n} \sum_{i=1}^{n} l(y^{(i)}, f(\boldsymbol{x}^{(i)}))
+$$
+
+\begin{itemize}
+    \item Loss function: $l: (y, f(\boldsymbol{x})) \mapsto \mathbb{R}_{\geq 0}$
+    \item Risk is expected loss: $\mathbb{E}_{(\boldsymbol{X}, Y)}[l(Y, f(\boldsymbol{X}))]$
+    \item Empirical means using sample data: $\frac{1}{n}\sum_{i=1}^{n} \cdots \approx \mathbb{E}[\cdots]$
+\end{itemize}
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Squared Loss}
+
+\begin{frame}
+\frametitle{Properties of Squared Loss}
+
+Consider a special loss function: \alert{squared loss}
+$$
+l(y, \hat{y}) = (y - \hat{y})^2
+$$
+
+We can show that
+$$
+\mathbb{E}[Y| X = x] = \argmin_{f} \mathbb{E}[(Y - f(\boldsymbol{X}))^2]
+$$
+under some regularity conditions. We will denote this global optimizer as $f^{*}$.
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Properties of Squared Loss - Sketch of Proof}
+
+First, we apply \textit{Law of Total Expectation},
+$$
+\mathbb{E}[(Y - f(\boldsymbol{X}))^2]
+= \mathbb{E}\big[ \mathbb{E}[(Y - f(\boldsymbol{X}))^2 | \boldsymbol{X}] \big]
+$$
+
+Then, we minimize the inner conditional expectation pointwise, which will guarantee to minimize the total expectation
+$$
+f^{*}(\boldsymbol{x}) \leftarrow
+\argmin_f \mathbb{E}[(Y - f(\boldsymbol{X}))^2 | \boldsymbol{X} = \boldsymbol{x}]
+$$
+
+Since $l(y, \hat{y})$ is convex in $\hat{y}$ for each $y$, we know that the conditional expectation is also convex in $\hat{y}$, therefore its global minimum can be found by checking local minima and boundary points. In this case of squared loss, it is gloabally strictly convex, so we know there is a local minimum and it is also the global minimum.
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Properties of Squared Loss - Sketch of Proof (Cont'd)}
+
+Fortunately, squared loss function is also differentiable everywhere, so we can use first-order and second-order tests to determine candidate local minima values.
+
+\begin{align*}
+\frac{d}{d \hat{y}} \mathbb{E}[(Y - f(\boldsymbol{X}))^2 | \boldsymbol{X} = \boldsymbol{x}]
+&= \mathbb{E}\bigg[ \frac{d}{d \hat{y}} (Y - f(\boldsymbol{X}))^2 | \boldsymbol{X} = \boldsymbol{x} \bigg] \\
+&= \mathbb{E}\bigg[ (-2) (Y - f(\boldsymbol{X})) | \boldsymbol{X} = \boldsymbol{x} \bigg]
+\stackrel{\text{set}}{=} 0 \\
+\implies f^{*}(\boldsymbol{x}) &= \mathbb{E}[Y | \boldsymbol{X} = \boldsymbol{x}]
+\end{align*}
+
+Similarly, the second-order condition implies that this is a local minimum.
+$$
+\frac{d^2}{d \hat{y}^2} \mathbb{E}[(Y - f(\boldsymbol{X}))^2 | \boldsymbol{X} = \boldsymbol{x}] = 2 > 0
+$$
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Tilted Absolute Value Loss}
+
+\begin{frame}
+\frametitle{Quantile Functions}
+
+Expectation ($\mathbb{E}[\cdots]$) is one of the most commonly used \textit{risk measure} ($\rho: \mathcal{L} \rightarrow \mathbb{R}$) of random variables. There are of course many others. For example, \alert{\textit{quantile function}} of a random variable is commonly defined as the left-continuous inverse of its cumulative distribution function
+$$
+Q_{X}(p) \stackrel{\text{denote}}{=} F^{-1}_X(p) \stackrel{\text{def}}{=}
+\inf \{ x \in \mathbb{R} | p \leq F_X(x) \}
+$$
+
+\begin{itemize}
+    \item This quantity is refered to as \textit{Value-at-Risk} (VaR) in mathematical finance.
+    \item Hinted by the previous correspondence between squared loss and conditional expectation, it is natural to ask: ``is there a loss function such that the optimizer of risk is the conditional quantile function?''
+\end{itemize}
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Visualization: Quantile Functions and CDF}
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Tilted Absolute Value Function}
+
+Leibniz integration rule
+lim f(inf) = 0
+
+\end{frame}
+
+%------------------------------------------------
+
+%------------------------------------------------
+\section{Quantile Regression}
+%------------------------------------------------
+
+\subsection{Modeling Framework}
+
+\begin{frame}
+\frametitle{Practical Considerations of Modeling}
+
+\begin{itemize}
+    \item In general, it is impossible to optimize risk over all possible functions $f$. Therefore, we often restrict ourselves in a more tractable family of functions (denoted by $\mathcal{F}$).
+    \item Even within this restricted family, we may only be able to find an approximate optimum given reasonable computational budget.
+\end{itemize}
+
+$$
+\hat{f} \stackrel{\text{optimizer}}{\longleftarrow} \argmin_{f \in \mathcal{F}} \frac{1}{n} \sum_{i=1}^{n} l(y^{(i)}, f(\boldsymbol{x}^{(i)}))
+$$
+
+Due to the above approximations, we are interested in
+\begin{itemize}
+    \item Is $\hat{f}$ consistent and unbiased? ($\mathbb{E}[\hat{f}(\boldsymbol{x})]$)
+    \item Is $\hat{f}$ stable? ($\text{Var}[\hat{f}(\boldsymbol{x})]$)
+    \item Are there any generalization error bounds? (Rademacher complexity of $\mathcal{F}$)
+\end{itemize}
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Statistical Modeling and Inference}
+
+Prediction Interval
+
+Inference through Hypothesis Testing
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Multiple Linear Regression}
+
+\begin{frame}
+\frametitle{Example: Ordinary Least Square}
+
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Example: Generalized Least Square}
+
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Quantile Regression}
+
+\begin{frame}
+\frametitle{Modeling Quantile Functions: Linear}
+
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Modeling Quantile Functions: Recursive Partitioning}
+
+Tree-based
+sklearn: slow and poor performance
+lightGBM: out of the box
+XGBoost: custom loss function
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Modeling Quantile Functions: Neural Networks}
+
+Joint modeling of multiple conditional quantiles from a multi-task learning point of view.
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Crossing of Quantile Curves}
+
+Rearranging
+
+\end{frame}
+
+%------------------------------------------------
+
+%------------------------------------------------
+\section{Applications}
+%------------------------------------------------
+
+\subsection{Econometrics}
+
+\begin{frame}
+\frametitle{Engel Curves for Food (Engel, 1857)}
+
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Statistics}
+
+\begin{frame}
+\frametitle{Fat Tail Distribution where Mean is Undefined}
+
+degree of fat-tailedness plot / classes of distributions
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}
+\frametitle{Non-parametric Prediction Intervals}
+
+
+
+\end{frame}
+
+%------------------------------------------------
+
+\subsection{Anomaly Detection}
+
+\begin{frame}
+\frametitle{Fitted Quantile}
+
+Is quantile uniform?
+
+\end{frame}
+
+%------------------------------------------------
+
+
+\section*{}
+\begin{frame}
+\frametitle{Bonus: Takeaway}
+
+convex risk measures and stochastic optimization form
+
+\end{frame}
+
+%------------------------------------------------
+
+\section*{}
+\begin{frame}
+\Huge{\centerline{Questions?}}
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+
+\end{document}
