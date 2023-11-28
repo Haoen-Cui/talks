@@ -1,0 +1,571 @@
+\documentclass[10pt]{beamer}
+\usetheme{Copenhagen}
+\title{Pseudo-Model-Free Hedging for Variable Annuities via Deep Reinforcement Learning}
+\author{}
+\date{}
+
+%gets rid of bottom navigation bars
+\setbeamertemplate{footline}[frame number]{}
+
+%gets rid of bottom navigation symbols
+\setbeamertemplate{navigation symbols}{}
+
+%gets rid of footer
+%will override 'frame number' instruction above
+%comment out to revert to previous/default definitions
+\setbeamertemplate{footline}{}
+
+\usepackage{amssymb} %to use \triangleq
+\usepackage{amsmath}
+\usepackage{dsfont}
+\usepackage[absolute,overlay]{textpos}
+\usepackage{graphicx}
+%\usepackage{subcaption}
+\usepackage{bbm}
+\usepackage{tikz}
+\usetikzlibrary{shapes,shadows,arrows,positioning,decorations.markings,arrows.meta,fit,decorations.pathreplacing}
+\usepackage{mathrsfs}
+\usepackage[compatibility=false]{caption}
+\usepackage{amsfonts}
+\usepackage{amsthm} %to use proof
+%\usepackage{stmaryrd}
+\usepackage{enumerate}
+%\usepackage{enumitem}
+%\setlist{leftmargin=*}
+\usepackage{authblk} %to use affil
+\usepackage{color} %to use color
+
+\usepackage{booktabs}
+
+% for adding gif
+\usepackage{graphicx}
+\DeclareGraphicsRule{.gif}{png}{.png}{%
+  \noexpand\epstopdfcall{convert #1 \noexpand\OutputFile}%
+}
+% \AppendGraphicsExtensions{.gif}
+
+%\pdfmapfile{+sansmathaccent.map}
+%\usepackage{sansmathaccent}
+\usepackage{adjustbox}
+\newcommand\myeq{\mathrel{\stackrel{\makebox[0pt]{\mbox{\normalfont\tiny set}}}{=}}}
+\newcommand\mydef{\mathrel{\stackrel{\makebox[0pt]{\mbox{\normalfont\tiny def}}}{=}}}
+\usefonttheme{professionalfonts}
+
+\def\actuarial#1{%
+\vbox{
+\offinterlineskip
+\tabskip=0pt
+\mathsurround=0pt
+\halign{##&\vrule##\cr
+\noalign{\hrule}%
+&height 1pt\cr
+$\scriptstyle#1$&\cr
+}%
+}%
+}
+
+\theoremstyle{definition}
+\setbeamertemplate{theorems}[numbered]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcounter{saveenumi}
+\newcommand{\seti}{\setcounter{saveenumi}{\value{enumi}}}
+\newcommand{\conti}{\setcounter{enumi}{\value{saveenumi}}}
+
+\resetcounteronoverlays{saveenumi}
+
+\DeclareMathOperator*{\esssup}{ess\,sup}
+\DeclareMathOperator*{\essinf}{ess\,inf}
+
+\usepackage{pgfplots}
+\DeclareMathOperator{\CDF}{cdf}
+
+\def\cdf(#1)(#2)(#3){0.5*(1+(erf((#1-#2)/(#3*sqrt(2)))))}%
+
+\tikzset{
+    declare function={
+        normcdf(\x,\m,\s)=1/(1 + exp(-0.07056*((\x-\m)/\s)^3 - 1.5976*(\x-\m)/\s));
+    }
+}
+
+\pgfmathdeclarefunction{gauss}{2}{%
+  \pgfmathparse{1/(#2*sqrt(2*pi))*exp(-((x-#1)^2)/(2*#2^2))}%
+}
+
+\begin{document}
+
+\begin{frame}
+\maketitle
+\vspace{-2.8cm}
+\begin{center}
+Haoen Cui
+\vspace{0.1cm}
+
+\begin{small}
+Georgia Institute of Technology
+\end{small}
+\vspace{0.5cm}
+
+2020 Actuarial Research Conference
+\vspace{0.1cm}
+
+\begin{small}
+August 10, 2020
+\end{small}
+
+\vspace{0.5cm}
+\begin{small}
+Based on a joint work with Wing Fung Chong (UIUC) and Yuxuan Li (UIUC).
+\end{small}
+\end{center}
+\end{frame}
+
+% \begin{frame}{Outline}
+% \begin{itemize}
+% \item Variable Annuities and Market Expansion
+% \item Literature Review
+% \begin{itemize}
+% \item Hedging for Variable Annuities
+% \item Hedging for Financial Derivatives via Machine Learning
+% \end{itemize}
+% \item Hedging for Variable Annuities as Markov Decision Process
+% % {\color{red}\item Essentials of (Deep) Reinforcement Learning}
+% % \begin{itemize}
+% % {\color{red}\item Finite State and Action Spaces}
+% % {\color{red}\item Continuous State and Action Spaces}
+% % \end{itemize}
+% \item {\it Hidden} Model Settings
+% %{\color{red}: Black-Scholes, Constant Force of Mortality Homogeneous Policyholders, GMMB}
+% \item Training and Testing
+% \begin{itemize}
+% \item Training Log %Dynamic
+% \item One-Step ``Return'' Distribution
+% \item Multi-Step ``Return'' Distribution
+% \item Benchmarking with Classical Delta
+% \item Performance Metrics
+% \end{itemize}
+% \item Conclusion and Future Directions
+% \end{itemize}
+% \end{frame}
+
+% \begin{frame}{Frame Title}
+% \includegraphics[width=0.5\linewidth]{action_prob.gif}
+% \end{frame}
+
+
+
+
+\begin{frame}{Introduction and Background}{Variable Annuities and Dynamic Hedging}
+\begin{itemize}
+\item Variable annuities are long-term {\it life} products where policyholders participate in {\it financial} investments for profit sharing with insurers.
+
+\item Effective pricing and {\it dynamically hedging} variable annuities with various features, such as GMMB, GMAB, GMDB, GMWB, are still growing research topics.
+
+\item Some recent work include: Bernard {\it et al.} (2014), Bernard and Kwak (2016), Chen {\it et al.} (2020), Coleman {\it et al.} (2007), Delong (2014), Feng (2018), Feng and Jing (2017), Feng and Yi (2019), Lin {et al.} (2016), Ng and Li (2013), Trottier {\it et al.} (2018), and more ...
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Introduction and Background}{Dynamic Hedging with Replicating Portfolio}
+\begin{itemize}
+\item No-arbitrage contract value $V_t$ at time $t$
+\item Replicating portfolio value $P_t$ at time $t$:
+$$P_t=H_tS_t+B_t$$
+where
+\begin{itemize}
+\item $H_t$: holding units of risky asset
+\item $S_t$: value of risky asset
+\item $B_t$: value of money market account (risk-free asset)
+\end{itemize}
+\end{itemize}
+\begin{center}
+\boxed{\text{Goal of hedging: choose }H_t\text{ such that }P_t\approx V_t\text{, for all $t$.}}
+\end{center}
+\end{frame}
+
+\begin{frame}{Introduction and Background}{Reinforcement Learning and its Recent Applications in Quantitative Finance}
+\begin{itemize}
+\item \textit{Reinforcement learning} (RL) is an expanding sub-field of machine learning in which an \textit{agent} learns a \textit{policy} (behavior pattern) in order to maximize a numerical sum of rewards by {\it interacting} with the environment.
+\begin{itemize}
+\item RL is different from \textit{supervised learning}, in which an agent learns from a provided training set of labeled examples. On the contrary, RL agent needs to colelct its own training data.
+\item RL is different from \textit{unsupervised learning}, in which an agent uncover a hidden structure in collections of unlabeled data. Instead, RL agent has a clear goal to maximize rewards.
+\item FREE (!!!) monograph: \textbf{Reinforcement Learning: An Introduction} by Barto and Sutton.
+\item Breakthrough advances in computer game-playing has led to public attention and ACM prizes
+\end{itemize}
+\item Recently, RL has been applied in quantitative finance, in particular dynamic hedging of financial derivatives.
+\begin{itemize}
+\item Buehler {\it et al.} (2019), Carbonneau (2020, in ARC 2020!), Halperin (2017), Kolm and Ritter (2020), and more ...
+\end{itemize}
+\item {\bf This work extends RL to dynamically hedge actuarial products, particularly on variable annuities.}
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{GMMB Contract and Delta Hedging Strategy}
+
+%%%%%%%%%%%%%%%%%%
+\begin{center}
+\begin{tikzpicture}[scale=0.7, transform shape]
+%axis
+\draw[->] (0,0) -- (10,0);
+\draw (10.2,0) node {$t$};
+
+%on axis
+\draw (1,0.2) -- (1,-0.2);
+\draw (1,-0.5) node {$0$};
+\draw (6,0.2) -- (6,-0.2);
+\draw (6,-0.5) node {\color{red}$T_x\geq$};
+\draw (8,0.2) -- (8,-0.2);
+\draw (8,-0.5) node {$T$};
+\draw (9,0.2) -- (9,-0.2);
+\draw (9,-0.5) node {\color{blue}$\leq T_x$};
+
+%claim
+\draw[blue,->,line width=0.5mm] (8,0.3) -- (8,0.8);
+
+%rider charge 1
+\draw [decorate,decoration={brace,amplitude=5pt,mirror,raise=4ex}]
+(1,-0.2) -- (6,-0.2) node[midway,yshift=-2em]{\color{red}Rider Charge};
+\draw[red,->,line width=0.5mm] (2.3,-1.1) -- (2.3,-1.4);
+\draw[red,->,line width=0.5mm] (4.7,-1.1) -- (4.7,-1.4);
+
+%rider charge 2
+\draw [decorate,decoration={brace,amplitude=5pt,mirror,raise=4ex}]
+(1,-0.9) -- (8,-0.9) node[midway,yshift=-2em]{\color{blue}Rider Charge};
+\draw[blue,->,line width=0.5mm] (3.3,-1.8) -- (3.3,-2.1);
+\draw[blue,->,line width=0.5mm] (5.7,-1.8) -- (5.7,-2.1);
+\end{tikzpicture}
+\end{center}
+%%%%%%%%%%%%%%%%%%
+
+\begin{center}
+\begin{tabular}{ll}
+$G$: GMMB contract guaranteed amount       &  $T_x$: future lifetime \\
+$F_t$: value of policyholder's sub-account &  $m_e$: rider annual rate \\
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+\item Contingent benefit at maturity: $(G - F_T)_{+}\mathds{1}_{\{ T_x > T\}}$
+\item Rider charges: $m_eF_t$ with $F_t = \frac{F_0}{S_0}S_te^{-mt}$
+    \begin{itemize}
+        \item $F_0$: initial investment amount
+        \item $m$: annualized fee deduction from sub-account
+    \end{itemize}
+\item Delta neutral hedging strategy
+$$ \boxed{H_t \myeq \Delta_t \mydef \frac{\partial V}{\partial S} (S_t, t)} $$
+See Feng (2018) for an expression of delta for GMMB contracts.
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{``Hidden'' Market Environment}
+
+Pseudo-model-free: We assume certain dynamics of the market but the learning agent does not have access to such information. Instead a sampler is provided for the agent to explore the environment. Experiments in this talk are based on
+
+\begin{itemize}
+\item Financial Market:
+    \begin{itemize}
+        \item Black-Scholes
+            \begin{itemize}
+                    \item Risky asset: $dS_t = \mu S_tdt + \sigma S_t dW_t $
+                    \item Risk-free asset: $dB_t = rB_tdt$
+            \end{itemize}
+        \item The only friction is a positive transaction cost
+            \begin{itemize}
+                    \item $ \kappa |S_{i+1} (H_{i+1} - H_{i})|$
+                    \item $\kappa$: one-way transaction cost, measured as a fraction of the volume of transactions
+            \end{itemize}
+    \end{itemize}
+\item Actuarial Market:
+    \begin{itemize}
+        \item Constant mortality force model: $T_x \sim \exp(\lambda)$
+            \begin{itemize}
+                \item $\lambda$: force of mortality
+            \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+In addition, one can also consider other risk factors such as behavioral models for policyholders.
+
+\end{frame}
+
+
+\begin{frame}{Agent--Environment Interface}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{center}
+\begin{tikzpicture}[scale=1, transform shape]
+%env box
+\node[draw, align=left, rectangle, inner sep=0pt, minimum size=3.5cm] at (0,0) {{\bf Environment}\\\quad\quad Financial\\\quad\quad Actuarial\\\quad\quad $\cdots$ \\World State $Z_t$};
+\draw (-0.9,0.62) -- (-0.9,-0.4);
+\draw[->] (-0.9,0.42) -- (-0.5,0.42);
+\draw[->] (-0.9,0.01) -- (-0.5,0.01);
+\draw[->] (-0.9,-0.4) -- (-0.5,-0.4);
+
+%agent box
+\node[draw, align=left, rectangle, inner sep=0pt, minimum size=3.5cm] at (7,0) {{\bf Agent}\\Learning Algo.\\\quad\quad RL Algo.\\\quad\quad Fcn. Approx.\\\quad\quad Optimization};
+\draw (5.9,0.22) -- (5.9,-0.8);
+\draw[->] (5.9,0.02) -- (6.3,0.02);
+\draw[->] (5.9,-0.39) -- (6.3,-0.39);
+\draw[->] (5.9,-0.8) -- (6.3,-0.8);
+
+%middle
+\draw[->] (1.75,0.8) -- (3.5,0.8);
+\draw[->] (3.5,0.8) -- (5.25,0.8);
+\draw[dashed] (3.5,1.2) -- (3.5,0.4);
+\draw (2.625,1.1) node {$X_{t+1}$};
+\draw (4.375,1.1) node {$X_{t}$};
+\draw (2.625,0.5) node {$R_{t+1}$};
+\draw (4.375,0.5) node {$R_{t}$};
+\draw (2.625,1.8) node {$t+1$};
+\draw (4.375,1.8) node {$t$};
+\draw[->] (5.25,-0.8) -- (1.75,-0.8);
+\draw (3.5,-0.5) node {Action $A_{t}$};
+
+\end{tikzpicture}
+\end{center}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{itemize}
+    \item Environment: how the world operates
+    \item Agent: learn to behave in such a world
+    \item $X_t$: observed state, which is a representation of world state $Z_t$ \\
+    $\to$ market information observed by the agent
+    \item $A_t$: action taken by the agent \\
+    $\to$ how to hedge, i.e. determine holdings $H_t$
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Markov Decision Process (MDP)}
+
+An MDP is specified by tuple $\langle$ $\mathcal{X}$, $\mathcal{A}$, $\mathcal{P}$, $\mathcal{R}$, $\gamma$ $\rangle$
+\begin{itemize}
+    \item $\mathcal{X}$: state space \\
+    $\to$ market information
+    \item $\mathcal{A}$: action space \\
+    $\to$ units of holding
+    \item $\mathcal{P}$: transition probability $\text{Prob}(x \xrightarrow{a} (x', r))$ \\
+    $\to$ market model: financial, actuarial, and etc
+    \item $\mathcal{R}$: (possibly stochastic) reward function $r(x \xrightarrow{a} x')$ \\
+    $\to$ encodes our goal to hedge
+    \item $\gamma$: discount factor \\
+    $\to$ how to add up rewards across time steps within an episode
+        \begin{itemize}
+                \item an episode/trajectory is a sequence of observations:
+                $$ X_0, A_0, R_1, X_1, A_1, R_2, \cdots $$
+                \item in this talk, we consider only $\gamma = 1$ for simplicity
+        \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Reward Engineering}
+
+To achieve the goal of hedging, we motivate the following reward function. Observe that
+\begin{align*}
+    \boxed{\text{Var}[X_T - V_T]}
+        &=    \mathbb{E}[(X_T - V_T)^2] - \mathbb({E}[X_T - V_T])^2 \\
+        &\leq \mathbb{E}[(X_T - V_T)^2]
+        =     \mathbb{E}\big[ \big( \sum_i \Delta(X_i - V_i) \big)^2 \big] \\
+        &\leq \boxed{c \cdot \mathbb{E}\big[ \sum_i (\Delta(X_i - V_i))^2 \big]}
+\end{align*}
+
+Thus, we define reward
+$$ R_i \mydef -((X_i - V_i) - (X_{i-1} - V_{i-1}))^2$$
+and resulting episode return $G_i \mydef \sum_{j \geq i+1} R_j$ with the heuristics that the optimizer of MDP
+$$ \max_\pi \mathbb{E}^{\pi}[G_0] $$
+approximately solves the hedging objective
+$$ \min_\pi \text{Var}^{\pi}[X_T - V_T] $$
+
+\end{frame}
+
+
+\begin{frame}{Policy Approximation with Neural Network}
+
+To solve the MDP, we consider policies parametrized by a neural network $\theta$. Let policy funciton
+$$ \pi_\theta (a | x) \sim \mathcal{N} (\mu_\theta (x), {\sigma_\theta}^2 (x)) $$
+denote the probability of taking action $a$ in state $x$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{center}
+\begin{tikzpicture}[scale=0.65, transform shape]
+\begin{axis}[width=0.5\textwidth,xticklabels={,,},yticklabels={,,}]
+\addplot[
+blue,
+domain = -5:5,
+samples = 100
+]
+{1/(1+exp(-x))};
+\end{axis}
+
+\draw (4.05,0) node {$\theta$};
+\draw (4.05,0) node {$\theta$};
+
+\draw (1.91,-0.4) node {FNN};
+
+\draw (-3.2,1.54) circle (1.5cm);
+
+\draw (-3.2,1.77) node {\bf Input};
+\draw (-3.2,1.27) node {State Vector $\stackrel{\rightarrow}{x}$};
+
+
+
+\draw[->] (-1.4,1.54) -- (-0.2,1.54);
+\draw[->] (4.02,1.54) -- (5.22,1.54);
+\draw (6,1.54) node {$\left(\hat{\mu}_{\theta},\hat{\sigma}^2_{\theta}\right)$};
+\draw[->] (6.78,1.54) -- (7.98,1.54);
+
+% \draw[->] (1.91,-0.8) -- (1.91,-2);
+% \draw (1.91,-2.5) node {$\left(\hat{\mu}_{\theta},\hat{\sigma}^2_{\theta}\right)$};
+
+% \draw[->] (1,-2.5) -- (-1.4,-2.5);
+
+\begin{scope}[xshift=0.78\linewidth,yshift=0.05\linewidth]
+\begin{axis}[width=0.45\textwidth,xticklabels={,,},yticklabels={,,},every axis plot post/.append style={
+mark=none,domain=-2:2.5,samples=50,smooth},
+% All plots: from -2:2, 50 samples, smooth, no marks
+axis x line*=bottom, % no box around the plot, only x and y axis
+axis y line=none, % the * suppresses the arrow tips
+enlargelimits=upper] % extend the axes a bit to the right and top
+\addplot {gauss(0.5,0.5)};
+\end{axis}
+\end{scope}
+
+
+\draw (10.1,0.1) node {\bf Output};
+\draw (10.1,-0.4) node {Policy $\pi_{\theta}\left(\cdot\right)$};
+
+
+\end{tikzpicture}
+\end{center}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+To optimize the neural network, we search for parameter $\widehat{\theta}$ using \textit{stochastic gradient descent}.
+
+\end{frame}
+
+
+\begin{frame}{Solving MDP with Policy Gradient}
+
+We seek to incrementally optimize policy $\pi_\theta$ by updating its parameter. Williams (1992) showed that
+$$
+\nabla_\theta \mathbb{E}^{\pi_\theta}[G_t]
+    = \mathbb{E}^{\pi_\theta}\bigg[
+        G_t \cdot \nabla_\theta \ln\big( \pi_\theta(A_t|X_t) \big)
+    \bigg]
+$$
+
+which yields \textit{stochastic gradient ascent} update
+$$
+\Delta\theta_t \varpropto G_t \cdot \nabla_\theta \ln(\pi_{\theta_t}(A_t|X_t)).
+$$
+This algorithm is known as REINFORCE, one of the simplest \textit{policy gradient} methods.
+\begin{itemize}
+    \item $G_t$: episode return to be collected from experience
+    \item $\nabla_\theta$: gradient can be found neural network's computation graph
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Training an RL agent}
+
+In the following experiments, we employed a particular \textit{policy gradient} algorithm: Proximal Policy Optimization (PPO, [Schulman et al (2017)]). Over the course of training,
+
+\begin{figure}
+\centering
+\begin{minipage}{.47\linewidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{entropy.gif}
+  \caption{The RL agent is more and more certain about the optimal action to take as the entropy loss drops in training.}
+  \label{fig:entropy}
+\end{minipage}%
+\begin{minipage}{.47\linewidth}
+  \centering
+  \includegraphics[width=.9\linewidth]{action_prob.gif}
+  \caption{Action probability distribution both shifts its center (optimal action) and shrinks its variance (uncertainty).}
+  \label{fig:action_prob}
+\end{minipage}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}{Performance of RL Agent}
+
+We monitor the training performance of RL agent in terms of its performance on episode return.
+$$
+G = \sum_{i} -((X_i - V_i) - (X_{i-1} - V_{i-1}))^2
+$$
+
+\begin{figure}
+\centering
+\includegraphics[width=0.5\linewidth]{return.gif}
+\caption{Episode return rapidly increases and converges to a level close to zero.}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}{Comparison with Delta Hedging}
+
+\begin{center}
+\begin{tabular}{@{}rcccccc@{}}
+\toprule
+Agent & Mean & Median & Std Dev
+& $\text{CVaR}_{90}$ & $\text{CVaR}_{95}$ & $\text{CVaR}_{99}$ \\ \midrule
+RL    &  0.99 & 1.52 & 5.88 & -11.07 & -14.34 & -20.48 \\
+Delta & -0.04 & 0.03 & 1.75 &  -3.45 &  -4.37 &  -6.41 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{error.png}
+\caption{RL (red) comparing to delta hedging (blue): mean hedging error is the solid line while median is the dashed line. RL achieved higher mean and median at the cost of volatility and tail risk.}
+\end{figure}
+
+\end{frame}
+
+
+\begin{frame}{Concluding Remarks}
+
+\begin{itemize}
+    \item We formulated the dynamic hedging problem in terms of MDP which can be solved using RL (in particular, we utilized PPO)
+    \item Our experiments considered a variable annuity contract (GMMB)
+    \item Comparing to delta hedging, the RL approach does not require knowledge of market dynamics, hence can be more complicated and flexible in modeling
+    \begin{itemize}
+        \item RL is able to achieve comparable performance as delta hedging with an out-of-the-box algorithm
+        \item However, RL may not be sample efficient and can require an excessive amount of data and computational power to train
+            \begin{itemize}
+                \item In the experiment we presented, it took 200k update steps $\approx$ 3 min clock time on a 2015 model MacBook with 4 cores
+            \end{itemize}
+    \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+
+\begin{frame}{Reference}
+
+\end{frame}
+
+
+\begin{frame}{Appendix}
+Later research introduced
+\begin{itemize}
+    \item Baseline function to reduce variance [...]
+    \item Actor-Critic methods to take advantage of temporal difference (TD) learning [...]
+    \item Importance sampling to perform off-policy learning [...]
+    \item Penalty (regularization) terms to stabilize update steps (e.g. TRPO [...], PPO [...], ACKTR [...]) facing non-stationary samples
+\end{itemize}
+\end{frame}
+
+
+\end{document}
